@@ -11,20 +11,22 @@ def main():
     # from_date = '2022-07-13T22:00:00Z'
     # from_date = datetime.datetime.strptime(from_date, "%Y-%m-%dT%H:%M:%SZ")
     until_date = datetime.datetime.now()
-    from_date = until_date - datetime.timedelta(hours=6)
+    from_date = until_date - datetime.timedelta(hours=16)
     registry = MetadataRegistry()
     registry.registerReader('oai_dc', oai_dc_reader)
     client = Client(URL, registry)
 
     with open('harvest.csv', 'w', newline='') as f:
-        fieldnames = ['identifiers', 'date', 'source', 'rights', 'partof', 'creators', 'title']
-        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=' ', quotechar='"')
+        fieldnames = ['identifiers', 'doi', 'date', 'source', 'rights', 'partof', 'creators', 'title']
+        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='$', quotechar='"')
         writer.writeheader()
 
         records = client.listRecords(metadataPrefix='oai_dc', from_=from_date, until=until_date, set='publication')
         # to make it more robust, we would have to check if the list isn't empty
+
         for num, record in enumerate(records):
-            print('%0.6d %s' % (num, record[0].identifier()))
+            # print('%0.6d %s' % (num, record[0].identifier()))
+
             # check if item has been deleted
             # deleted items have 'header status=deleted' and no metadata
             # if not deleted, get metadata: title, creator, date, type, source, identifier
@@ -38,18 +40,23 @@ def main():
                 # continue if pubtype is not present or if it's an article
                 if not pubtype or pubtype[0] == 'info:eu-repo/semantics/article':
                     identifiers = fields['identifier']
+                    doi = ''
+                    for id in identifiers:
+                        if id.startswith('10.'):
+                            doi = id
+
                     itemdate = fields['date']
                     source = fields['source']
                     rights = fields['rights']
                     partof = fields['ispartof']
                     creator = fields['creator']
                     title = fields['title']
-                    print(identifiers)
-                    print(" by ")
-                    print(creator)
-                    print(" is part of")
-                    print(partof)
-                    writer.writerow({'identifiers': identifiers, 'date': itemdate, 'source': source,
+                    print(doi)
+                    # print(" by ")
+                    # print(creator)
+                    # print(" is part of")
+                    # print(partof)
+                    writer.writerow({'identifiers': identifiers, 'doi': doi, 'date': itemdate, 'source': source,
                                      'rights': rights, 'partof': partof, 'creators': creator,
                                      'title': title})
 
