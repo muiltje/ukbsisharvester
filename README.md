@@ -3,13 +3,13 @@
 Please note: add fiels to metadata.py if needed (e.g. isPartOf)
 
 
-#Pipenv 
+# Pipenv 
 
 Pipenv is used to manage the project dependencies and create a virtual environment. 
 
 More info: https://pipenv-fork.readthedocs.io/en/latest/basics.html
 
-#Workflow:
+# Workflow:
 
 After installing pip end pipenv run the following commands:
 
@@ -17,7 +17,7 @@ After installing pip end pipenv run the following commands:
 
 `pipenv shell`
 
-#PYOAI
+# PYOAI
 
 This project uses: https://github.com/infrae/pyoai
 
