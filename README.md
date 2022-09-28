@@ -2,6 +2,19 @@
 
 Please note: add fiels to metadata.py if needed (e.g. isPartOf)
 
+# Development Workflow:
+
+After installing pip end pipenv run the following commands:
+
+`git clone --recurse-submodules git@github.com: . . . `
+
+`cd to/you/project/dir/`
+
+`pipenv install` 
+
+`pipenv shell`
+
+`python harverst.py`
 
 # Pipenv 
 
@@ -9,13 +22,6 @@ Pipenv is used to manage the project dependencies and create a virtual environme
 
 More info: https://pipenv-fork.readthedocs.io/en/latest/basics.html
 
-# Workflow:
-
-After installing pip end pipenv run the following commands:
-
-`pipenv install` 
-
-`pipenv shell`
 
 # PYOAI
 
