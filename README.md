@@ -21,12 +21,23 @@ After installing pip end pipenv run the following commands:
 
 This project uses: https://github.com/infrae/pyoai
 
-The package is committed added as a git sumbodule, to check out the submodule:
+The package is committed added as a git sumbodule, 
+
+To check out the submodule:
 
 `git clone --recurse-submodules https:// ....`
 
-To update init and update the submodule:
+To init and update the submodule:
 
 `git submodule init`
 
 `git submodule update`
+
+or alternatively
+
+` git submodules update --init`
+
+to update the submodule with the latest version
+
+`git pull --recurse-submodules`
+
