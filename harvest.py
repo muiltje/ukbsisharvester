@@ -23,7 +23,7 @@ def main():
             'description': ('textList', 'oai_dc:dc/dc:description/text()'),
             'publisher': ('textList', 'oai_dc:dc/dc:publisher/text()'),
             'contributor': ('textList', 'oai_dc:dc/dc:contributor/text()'),
-            'date': ('textList', 'oai_dc:dc/dc:date/text()'),
+            'date': ('textList', 'oai_dc:dc/dc:date/text()'), # publicatie datum voor de instelling
             'type': ('textList', 'oai_dc:dc/dc:type/text()'),
             'format': ('textList', 'oai_dc:dc/dc:format/text()'),
             'identifier': ('textList', 'oai_dc:dc/dc:identifier/text()'),
@@ -41,11 +41,12 @@ def main():
 
 
 
+
     registry.registerReader('oai_dc', oai_dc_reader)
     client = Client(URL, registry)
 
     with open('harvest.csv', 'w', newline='') as f:
-        fieldnames = ['identifiers', 'doi', 'date', 'source', 'rights', 'partof', 'creators', 'title']
+        fieldnames = ['doi', 'institute', 'datestamp', 'type', 'identifiers', 'date','source', 'rights', 'partof', 'creators', 'title']
         writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='$', quotechar='"')
         writer.writeheader()
 
@@ -55,6 +56,10 @@ def main():
         for num, record in enumerate(records):
             # print('%0.6d %s' % (num, record[0].identifier()))
 
+            # break for testing
+            # if num == 100:
+            #     break
+
             # check if item has been deleted
             # deleted items have 'header status=deleted' and no metadata
             # if not deleted, get metadata: title, creator, date, type, source, identifier
@@ -63,6 +68,10 @@ def main():
             if record[0].isDeleted():
                 print("item deleted")
             elif record[1] is not None:
+                header = record[0]
+                datestamp = header.datestamp()
+                institute = header.identifier()
+
                 fields = record[1].getMap()
                 pubtype = fields['type']
                 # continue if pubtype is not present or if it's an article
@@ -84,9 +93,9 @@ def main():
                     # print(creator)
                     # print(" is part of")
                     # print(partof)
-                    writer.writerow({'identifiers': identifiers, 'doi': doi, 'date': itemdate, 'source': source,
-                                     'rights': rights, 'partof': partof, 'creators': creator,
-                                     'title': title})
+                    writer.writerow({'doi': doi, 'institute': institute, 'datestamp': datestamp,'type': pubtype,
+                                     'identifiers': identifiers, 'date': itemdate, 'source': source,'rights': rights,
+                                     'partof': partof, 'creators': creator, 'title': title})
 
 
 if __name__ == '__main__':
