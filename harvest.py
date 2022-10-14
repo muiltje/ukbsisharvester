@@ -8,7 +8,8 @@ from oaipmh.metadata import MetadataRegistry, MetadataReader
 
 URL = 'http://oai.narcis.nl/oai'
 
-CSV = {"file": None, "writer": None}
+MAX_RECORD_FILE = 10000 # Max record per CSV file
+CSV = {"file": False, "writer": None, "file_count": 1}
 
 
 def get_csv(file_count, from_date, until_date, new=True):
@@ -60,21 +61,23 @@ def get_client():
 
 # This function will harvest everything between two dates
 def initial_harvest():
-    from_date = datetime.fromisoformat('2017-11-01')
-    until_date = datetime.fromisoformat('2018-02-01')
+    from_date = datetime.fromisoformat('2021-01-01')
+    until_date = datetime.fromisoformat('2022-10-01')
 
     max_write_count = 10000
 
     client = get_client()
 
-    file = False
     # Set start cycle date for the initial iteration
     start_itr = from_date
 
     for end_itr in rrule(freq=MONTHLY, dtstart=from_date, until=until_date)[1:]:
         print('Processing dates: ', start_itr, end_itr)
-        if file is not False:
-            file.close()
+        if CSV["file"] is not False:
+            CSV["file"].close()
+            CSV["file"] = False
+            CSV["writer"] = False
+            CSV["file_count"] = 1
 
         try:
             records = client.listRecords(metadataPrefix='oai_dc', from_=start_itr, until=end_itr, set='publication')
@@ -82,20 +85,9 @@ def initial_harvest():
             file_count = 1  # Counts the number of files written in a two date period - for file naming
 
             for num, record in enumerate(records):
-                # Create the file
-                if write_count == max_write_count:
-                    # Get another file
-                    file.close()
-                    file_count += 1
-                    write_count = 1
-
-                if (file is False or file.closed) and write_count == 1:
-                    csv_file = get_csv(file_count, start_itr, end_itr, True)
-                    writer = csv_file["writer"]
-                    file = csv_file["file"]
 
                 if record[0].isDeleted() is False and record[1] is not None:
-                    if write_record_to_csv(record, writer) is True:
+                    if write_record_to_csv(record, end_itr, start_itr, write_count) is True:
                         write_count += 1
 
         except Exception as e:
@@ -109,6 +101,26 @@ def initial_harvest():
     print('## END PROCESSING', from_date, until_date)
 
 
+def get_file_writer(end_itr, start_itr, write_count):
+
+    file = CSV["file"]
+    file_count = CSV["file_count"]
+
+    # Create the file
+    if write_count == MAX_RECORD_FILE:
+        # Get another file
+        file.close()
+        file_count += 1
+        write_count = 1
+
+    if (file is False or file.closed) and write_count == 1:
+        csv_file = get_csv(file_count, start_itr, end_itr, True)
+        CSV["writer"] = csv_file["writer"]
+        CSV["file"] = csv_file["file"]
+
+    return  CSV["writer"]
+
+
 def create_file_name(file_count, from_date, until_date):
     file_name = 'harvest/%s-%s_%d.csv' % (
         from_date.strftime('%Y%m%d'), until_date.strftime('%Y%m%d'), file_count
@@ -116,45 +128,45 @@ def create_file_name(file_count, from_date, until_date):
     return file_name
 
 
-def recurring_harvest():
-    # from_date = '2022-07-13T22:00:00Z'
-    # from_date = datetime.strptime(from_date, "%Y-%m-%dT%H:%M:%SZ")
-    until_date = datetime.now()
-    from_date = until_date - timedelta(hours=16)
-    harvest(from_date, until_date)
+# def recurring_harvest():
+#     # from_date = '2022-07-13T22:00:00Z'
+#     # from_date = datetime.strptime(from_date, "%Y-%m-%dT%H:%M:%SZ")
+#     until_date = datetime.now()
+#     from_date = until_date - timedelta(hours=16)
+#     harvest(from_date, until_date)
 
 
-def harvest(from_date, until_date):
-    client = get_client()
+# def harvest(from_date, until_date):
+#     client = get_client()
+#
+#     with open('harvest.csv', 'w', newline='') as f:
+#         fieldnames = ['doi', 'institute', 'datestamp', 'type', 'identifiers', 'date', 'source', 'rights', 'partof',
+#                       'creators', 'title']
+#         writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='$', quotechar='"')
+#         writer.writeheader()
+#
+#         records = client.listRecords(metadataPrefix='oai_dc', from_=from_date, until=until_date, set='publication')
+#         # to make it more robust, we would have to check if the list isn't empty
+#
+#         for num, record in enumerate(records):
+#             # print('%0.6d %s' % (num, record[0].identifier()))
+#
+#             # break for testing
+#             if num == 100:
+#                 break
+#
+#             # check if item has been deleted
+#             # deleted items have 'header status=deleted' and no metadata
+#             # if not deleted, get metadata: title, creator, date, type, source, identifier
+#             # field 'ispartof' is not included in the module, so we hacked it in
+#
+#             if record[0].isDeleted():
+#                 print("item deleted")
+#             elif record[1] is not None:
+#                 write_record_to_csv(record, writer)
 
-    with open('harvest.csv', 'w', newline='') as f:
-        fieldnames = ['doi', 'institute', 'datestamp', 'type', 'identifiers', 'date', 'source', 'rights', 'partof',
-                      'creators', 'title']
-        writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='$', quotechar='"')
-        writer.writeheader()
 
-        records = client.listRecords(metadataPrefix='oai_dc', from_=from_date, until=until_date, set='publication')
-        # to make it more robust, we would have to check if the list isn't empty
-
-        for num, record in enumerate(records):
-            # print('%0.6d %s' % (num, record[0].identifier()))
-
-            # break for testing
-            if num == 100:
-                break
-
-            # check if item has been deleted
-            # deleted items have 'header status=deleted' and no metadata
-            # if not deleted, get metadata: title, creator, date, type, source, identifier
-            # field 'ispartof' is not included in the module, so we hacked it in
-
-            if record[0].isDeleted():
-                print("item deleted")
-            elif record[1] is not None:
-                write_record_to_csv(record, writer)
-
-
-def write_record_to_csv(record, writer):
+def write_record_to_csv(record,end_itr, start_itr, write_count):
     """
     Write a record to CSV, if the record is written return true
     """
@@ -179,7 +191,7 @@ def write_record_to_csv(record, writer):
         title = fields['title']
 
         # Get file if exists or create e new one
-
+        writer = get_file_writer(end_itr, start_itr, write_count)
 
         writer.writerow({'doi': doi, 'institute': institute, 'datestamp': datestamp, 'type': pub_type,
                          'identifiers': identifiers, 'date': itemdate, 'source': source, 'rights': rights,
