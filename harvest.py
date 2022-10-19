@@ -85,13 +85,12 @@ def initial_harvest():
             file_count = 1  # Counts the number of files written in a two date period - for file naming
 
             for num, record in enumerate(records):
-
                 if record[0].isDeleted() is False and record[1] is not None:
                     if write_record_to_csv(record, end_itr, start_itr, write_count) is True:
                         write_count += 1
 
         except Exception as e:
-            print("!!!!! Exception:", e)
+            print("!!!!! Exception: ", e)
 
         # change start iteration date to the current end iteration date close current file
         start_itr = end_itr
@@ -128,12 +127,21 @@ def create_file_name(file_count, from_date, until_date):
     return file_name
 
 
-# def recurring_harvest():
-#     # from_date = '2022-07-13T22:00:00Z'
-#     # from_date = datetime.strptime(from_date, "%Y-%m-%dT%H:%M:%SZ")
-#     until_date = datetime.now()
-#     from_date = until_date - timedelta(hours=16)
-#     harvest(from_date, until_date)
+def recurring_harvest(hours):
+    # from_date = '2022-07-13T22:00:00Z'
+    # from_date = datetime.strptime(from_date, "%Y-%m-%dT%H:%M:%SZ")
+    until_date = datetime.now()
+    from_date = until_date - timedelta(hours=hours)
+
+    client = get_client()
+    try:
+        records = client.listRecords(metadataPrefix='oai_dc', from_=from_date, until=until_date, set='publication')
+        for num, record in enumerate(records):
+            if record[0].isDeleted() is False and record[1] is not None:
+                write_record_to_csv(record, until_date, from_date, 1)
+
+    except Exception as e:
+        print("!!!!! Exception:", e)
 
 
 # def harvest(from_date, until_date):
@@ -150,10 +158,6 @@ def create_file_name(file_count, from_date, until_date):
 #
 #         for num, record in enumerate(records):
 #             # print('%0.6d %s' % (num, record[0].identifier()))
-#
-#             # break for testing
-#             if num == 100:
-#                 break
 #
 #             # check if item has been deleted
 #             # deleted items have 'header status=deleted' and no metadata
@@ -174,21 +178,23 @@ def write_record_to_csv(record,end_itr, start_itr, write_count):
     datestamp = header.datestamp()
     institute = header.identifier()
     fields = record[1].getMap()
-    pub_type = fields['type']
+    pub_type = fields['type'][0]
     # continue if pubtype is not present or if it's an article
-    if not pub_type or pub_type[0] == 'info:eu-repo/semantics/article':
-        identifiers = fields['identifier']
+    if not pub_type or pub_type == 'info:eu-repo/semantics/article':
+
         doi = ''
-        for id in identifiers:
+        for id in fields['identifier']:
             if id.startswith('10.'):
                 doi = id
 
-        itemdate = fields['date']
-        source = fields['source']
-        rights = fields['rights']
-        partof = fields['ispartof']
-        creator = fields['creator']
-        title = fields['title']
+        identifiers = list_2_string(fields['identifier'])
+        itemdate = fix_itemdate(fields['date'][0])
+
+        source = list_2_string(fields['source'])
+        rights = list_2_string(fields['rights'])
+        partof = list_2_string(fields['ispartof'])
+        creator = list_2_string(fields['creator'])
+        title = list_2_string(fields['title'])
 
         # Get file if exists or create e new one
         writer = get_file_writer(end_itr, start_itr, write_count)
@@ -200,7 +206,21 @@ def write_record_to_csv(record,end_itr, start_itr, write_count):
 
     return False
 
+def fix_itemdate(string):
+    date_parts = string.split("-")
+    year = date_parts[0]
+    month = date_parts[1] if 1 < len(date_parts) else '01'
+    day = date_parts[2] if 2 < len(date_parts) else '01'
+    return year + "-" + month + "-" + day
+
+def list_2_string(list):
+    if len(list) == 1:
+        return list[0]
+    return ','.join(f'"{w}"' for w in list)
+
+
+
 
 if __name__ == '__main__':
-    # recurring_harvest()
-    initial_harvest()
+    recurring_harvest(12)
+    # initial_harvest()
