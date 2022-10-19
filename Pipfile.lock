@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "5c182c291b56d385e000608cad1c52c6fb7aeb139ac0f7e96823a38d191ed72f"
+            "sha256": "9ae98bf1136e619bbf712e68b4b8acfb1e80f794f5910ab6e81f0e6d15bc692c"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -95,6 +95,14 @@
         "pyoai": {
             "path": "./lib/pyoai",
             "version": "==2.5.2pre"
+        },
+        "python-dateutil": {
+            "hashes": [
+                "sha256:0123cacc1627ae19ddf3c27a5de5bd67ee4586fbdd6440d9748f8abb483d3e86",
+                "sha256:961d03dc3453ebbc59dbdea9e4e11c5651520a876d0f4db161e8674aae935da9"
+            ],
+            "index": "pypi",
+            "version": "==2.8.2"
         },
         "six": {
             "hashes": [

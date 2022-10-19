@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 lxml = "*"
 pyoai = {path = "./lib/pyoai"}
+python-dateutil = "*"
 
 [dev-packages]
 
