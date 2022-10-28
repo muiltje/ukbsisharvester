@@ -6,9 +6,10 @@ from datetime import datetime
 from oaipmh.client import Client
 from oaipmh.metadata import MetadataRegistry, oai_dc_reader
 
+URL = 'http://oai.narcis.nl/oai'
+
 
 def count_articles():
-    URL = 'http://oai.narcis.nl/oai'
     registry = MetadataRegistry()
 
     start = datetime.fromisoformat('2022-01-01')
@@ -54,5 +55,28 @@ def count_articles():
             prev = dt
 
 
+def simple_count():
+    start = datetime.fromisoformat('2018-01-01')
+    end = datetime.fromisoformat('2019-10-01')
+
+    registry = MetadataRegistry()
+    registry.registerReader('oai_dc', oai_dc_reader)
+    client = Client(URL, registry)
+
+    records = client.listIdentifiers(metadataPrefix='oai_dc', from_=start, until=end, set='publication')
+
+    deleted = 0
+    count = 0
+
+    for num, record in enumerate(records):
+        if record.isDeleted():
+            deleted += 1
+        else:
+            count += 1
+
+    print(">>>> START >>>> Counting records ", start.strftime('%d-%m-%Y'), end.strftime('%d-%m-%Y'))
+    print(">> Count: ", count, " - Deleted: ", deleted)
+
+
 if __name__ == '__main__':
-    count_articles()
+    simple_count()
