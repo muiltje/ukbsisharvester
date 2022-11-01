@@ -2,7 +2,7 @@ import csv
 import mysql.connector
 
 from dateutil.rrule import rrule, MONTHLY
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from oaipmh.client import Client
 from oaipmh.metadata import MetadataRegistry, MetadataReader
@@ -11,6 +11,7 @@ from oaipmh import error as oaipmhError
 URL = 'http://oai.narcis.nl/oai'
 
 MAX_RECORD_FILE = 25000  # Max record per CSV file
+
 CSV = {
     "file": False,
     "writer": None,
@@ -19,7 +20,8 @@ CSV = {
 }
 
 
-def get_csv(file_count, from_date, until_date, new=True):
+# returns a CSV file with writer instance
+def get_csv(file_count, from_date, until_date):
     # file name
     file_name = create_file_name(file_count, from_date, until_date)
     print(' > Creating file', file_count, from_date.strftime('%Y%m%d'), until_date.strftime('%Y%m%d'), file_name)
@@ -68,100 +70,55 @@ def get_client():
 
 
 # This function will harvest everything between two dates
-def initial_harvest():
-    from_date = datetime.fromisoformat('2022-09-01')
-    # until_date = datetime.fromisoformat('2017-02-01')
-    until_date = datetime.fromisoformat('2022-10-01')
-
-    client = get_client()
+# dats should be in iso format: 2020-01-01
+def monthly_harvest(start, end):
+    from_date = datetime.fromisoformat(start)
+    until_date = datetime.fromisoformat(end)
 
     # Set start cycle date for the initial iteration
     start_itr = from_date
 
     for end_itr in rrule(freq=MONTHLY, dtstart=from_date, until=until_date)[1:]:
+        harvest_data(start_itr, end_itr)
 
-        print('# Processing dates: %s to %s , count: %s' % (
-        start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'), CSV['write_count']))
-
-        # reset file on every pair of dates
-        if CSV["file"] is not False:
-            CSV["file"].close()
-            CSV["file"] = False
-            CSV["writer"] = False
-            CSV["file_count"] = 1
-            CSV["write_count"] = 1
-
-        try:
-
-            records = client.listRecords(metadataPrefix='oai_dc', from_=start_itr, until=end_itr, set='publication')
-
-            for num, record in enumerate(records):
-                if record[0].isDeleted() is False and record[1] is not None:
-                    rd = get_record_data(record)
-                    # continue if pubtype is not present or if it's an article
-                    if not rd['type'] or rd['type'] == 'info:eu-repo/semantics/article':
-                        if write_record_to_csv(rd, end_itr, start_itr) is True:
-                            CSV["write_count"] += 1
-                            write_record_to_mysql(rd)
-
-        except oaipmhError.NoRecordsMatchError as e:
-            print("     !!!!! Exception: ", e)
-
-        # print some info
-        print('     >>> written %d records between %s and %s' % (CSV['write_count'] - 1, start_itr, end_itr))
-
-        # change start iteration date to the current end iteration date close current file
+        # change start iteration date to the current end iteration date
         start_itr = end_itr
 
     print('## END PROCESSING', from_date, until_date)
 
 
-def recurring_harvest(hours):
-    # from_date = '2022-07-13T22:00:00Z'
-    # from_date = datetime.strptime(from_date, "%Y-%m-%dT%H:%M:%SZ")
-    until_date = datetime.now()
-    # from_date = until_date - timedelta(hours=hours)
-    from_date = datetime.fromisoformat('2022-09-01')
+
+def harvest_data(start_itr, end_itr):
+    print('# Processing dates: %s to %s , count: %s' % (
+        start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'), CSV['write_count']))
 
     client = get_client()
+
+    # reset file on every pair of dates
+    if CSV["file"] is not False:
+        CSV["file"].close()
+        CSV["file"] = False
+        CSV["writer"] = False
+        CSV["file_count"] = 1
+        CSV["write_count"] = 1
+
     try:
-        records = client.listRecords(metadataPrefix='oai_dc', from_=from_date, until=until_date, set='publication')
+        records = client.listRecords(metadataPrefix='oai_dc', from_=start_itr, until=end_itr, set='publication')
         for num, record in enumerate(records):
             if record[0].isDeleted() is False and record[1] is not None:
                 rd = get_record_data(record)
                 # continue if pubtype is not present or if it's an article
-                if not rd['type'] or rd['type'] == 'info:eu-repo/semantics/article':
-                    write_record_to_csv(rd, until_date, from_date)
-                    write_record_to_mysql(rd)
+                # if not rd['type'] or rd['type'] == 'info:eu-repo/semantics/article':
+                if write_record_to_csv(rd, end_itr, start_itr) is True:
+                    CSV["write_count"] += 1
+                    # write_record_to_mysql(rd)
 
-    except Exception as e:
-        print("!!!!! Exception:", e)
+    except oaipmhError.NoRecordsMatchError as e:
+        print("     !!!!! Exception: ", e)
+    # print some info
+    print('     >>> written %d records between %s and %s' % (CSV['write_count'] - 1, start_itr, end_itr))
 
 
-# def harvest(from_date, until_date):
-#     client = get_client()
-#
-#     with open('harvest.csv', 'w', newline='') as f:
-#         fieldnames = ['doi', 'institute', 'datestamp', 'type', 'identifiers', 'date', 'source', 'rights', 'partof',
-#                       'creators', 'title']
-#         writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='$', quotechar='"')
-#         writer.writeheader()
-#
-#         records = client.listRecords(metadataPrefix='oai_dc', from_=from_date, until=until_date, set='publication')
-#         # to make it more robust, we would have to check if the list isn't empty
-#
-#         for num, record in enumerate(records):
-#             # print('%0.6d %s' % (num, record[0].identifier()))
-#
-#             # check if item has been deleted
-#             # deleted items have 'header status=deleted' and no metadata
-#             # if not deleted, get metadata: title, creator, date, type, source, identifier
-#             # field 'ispartof' is not included in the module, so we hacked it in
-#
-#             if record[0].isDeleted():
-#                 print("item deleted")
-#             elif record[1] is not None:
-#                 write_record_to_csv(record, writer)
 
 def get_record_data(record):
     header = record[0]
@@ -214,7 +171,7 @@ def get_file_writer(end_itr, start_itr):
         CSV["write_count"] = 1
 
     if CSV["file"] is False or CSV["file"].closed:
-        csv_file = get_csv(CSV["file_count"], start_itr, end_itr, True)
+        csv_file = get_csv(CSV["file_count"], start_itr, end_itr)
         CSV["writer"] = csv_file["writer"]
         CSV["file"] = csv_file["file"]
 
@@ -258,12 +215,43 @@ def fix_item_date(date):
     return year + "-" + month + "-" + day
 
 
-def list_2_string(list):
-    if len(list) == 1:
-        return list[0]
-    return ','.join(f'"{w}"' for w in list)
+def list_2_string(lst):
+    if len(lst) == 1:
+        return lst[0]
+    return ','.join(f'"{w}"' for w in lst)
+
+
+def initial_harvest():
+    yesterday = date.today() - timedelta(days=1)
+    first_day_month = yesterday.strftime('%Y-%m-01')
+
+    monthly_harvest('2017-01-01', first_day_month)
+
+    from_date = first_day_month
+    end_day = yesterday.strftime('%Y-%m-%d')
+    harvest_data(from_date, end_day)
+
+
+def daily_harvest():
+    monthly_start = '2017-01-01'
+    yesterday = date.today() - timedelta(days=1)
+    monthly_end = yesterday.strftime('%Y-%m-01')
+    monthly_harvest(monthly_start, monthly_end)
+
+
+
+
+def recurring_harvest(hours):
+    # from_date = '2022-07-13T22:00:00Z'
+    # from_date = datetime.strptime(from_date, "%Y-%m-%dT%H:%M:%SZ")
+    until_date = datetime.now()
+    # from_date = until_date - timedelta(hours=hours)
+    from_date = datetime.fromisoformat('2022-09-01')
+
+    harvest_data(from_date, until_date)
 
 
 if __name__ == '__main__':
-    recurring_harvest(12)
-    # initial_harvest()
+    # daily_harvest()
+    # recurring_harvest(12)
+    monthly_harvest('2020-04-01', '2020-06-01')
