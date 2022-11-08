@@ -19,6 +19,10 @@ CSV = {
     "file_count": 1  # Counts the number of files written in a two date period - for file naming
 }
 
+CSV_RECORD = {'doi': None, 'identifier': None, 'datestamp': None, 'deleted': False, 'type': None,
+              'identifiers': None, 'date': None, 'source': None, 'rights': None,
+              'partof': None, 'creator': None, 'title': None}
+
 
 # returns a CSV file with writer instance
 def get_csv(file_count, from_date, until_date):
@@ -28,8 +32,7 @@ def get_csv(file_count, from_date, until_date):
 
     # create a new file
     f = open(file_name, 'w', newline='')
-    fieldnames = ['doi', 'institute', 'datestamp', 'type', 'identifiers', 'date', 'source', 'rights', 'partof',
-                  'creators', 'title']
+    fieldnames = list(CSV_RECORD.keys())
     writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='$', quotechar='"')
     writer.writeheader()
     return {"file": f, "writer": writer}
@@ -69,25 +72,6 @@ def get_client():
     return client
 
 
-# This function will harvest everything between two dates
-# dats should be in iso format: 2020-01-01
-def monthly_harvest(start, end):
-    from_date = datetime.fromisoformat(start)
-    until_date = datetime.fromisoformat(end)
-
-    # Set start cycle date for the initial iteration
-    start_itr = from_date
-
-    for end_itr in rrule(freq=MONTHLY, dtstart=from_date, until=until_date)[1:]:
-        harvest_data(start_itr, end_itr)
-
-        # change start iteration date to the current end iteration date
-        start_itr = end_itr
-
-    print('## END PROCESSING', from_date, until_date)
-
-
-
 def harvest_data(start_itr, end_itr):
     print('# Processing dates: %s to %s , count: %s' % (
         start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'), CSV['write_count']))
@@ -105,48 +89,67 @@ def harvest_data(start_itr, end_itr):
     try:
         records = client.listRecords(metadataPrefix='oai_dc', from_=start_itr, until=end_itr, set='publication')
         for num, record in enumerate(records):
-            if record[0].isDeleted() is False and record[1] is not None:
-                rd = get_record_data(record)
-                # continue if pubtype is not present or if it's an article
-                # if not rd['type'] or rd['type'] == 'info:eu-repo/semantics/article':
-                if write_record_to_csv(rd, end_itr, start_itr) is True:
-                    CSV["write_count"] += 1
-                    # write_record_to_mysql(rd)
+
+            # if record[0].isDeleted() is False and record[1] is not None:
+            rd = get_record_data(record)
+
+            # continue if pubtype is not present or if it's an article
+            # if not rd['type'] or rd['type'] == 'info:eu-repo/semantics/article':
+
+                # SAVE only if pubdate is 2021
+                # if rd['date'].split("-")[0] == '2021':
+
+            if write_record_to_csv(rd, end_itr, start_itr) is True:
+                CSV["write_count"] += 1
+
 
     except oaipmhError.NoRecordsMatchError as e:
         print("     !!!!! Exception: ", e)
+    except TypeError:
+        print(type(record))
+
     # print some info
     print('     >>> written %d records between %s and %s' % (CSV['write_count'] - 1, start_itr, end_itr))
 
 
-
 def get_record_data(record):
+    #make a copy without reference
+    csv_rec =  dict(CSV_RECORD)
+
     header = record[0]
-    datestamp = header.datestamp()
-    institute = header.identifier()
-    fields = record[1].getMap()
-    pub_type = fields['type'][0] if type(fields['type']) is list and len(fields['type']) > 0 else ''
+    csv_rec['datestamp'] = header.datestamp()
+    csv_rec['identifier'] = header.identifier()
 
-    identifiers = list_2_string(fields['identifier'])
-    itemdate = fix_item_date(fields['date'])
+    deleted = header.isDeleted()
 
-    doi = ''
-    for id in fields['identifier']:
-        if id.startswith('10.'):
-            doi = id
-    if len(doi) > 254:
-        print('DOI too long: ', doi)
-        doi = doi[:254]
+    if deleted:
+        csv_rec['deleted'] = True
 
-    source = list_2_string(fields['source'])
-    rights = list_2_string(fields['rights'])
-    partof = list_2_string(fields['ispartof'])
-    creator = list_2_string(fields['creator'])
-    title = list_2_string(fields['title'])
+    else:
 
-    return {'doi': doi, 'institute': institute, 'datestamp': datestamp, 'type': pub_type,
-            'identifiers': identifiers, 'date': itemdate, 'source': source, 'rights': rights,
-            'partof': partof, 'creators': creator, 'title': title}
+        fields = record[1].getMap()
+
+        csv_rec['type'] = fields['type'][0] if type(fields['type']) is list and len(fields['type']) > 0 else ''
+
+        csv_rec['identifiers'] = list_2_string(fields['identifier'])
+        csv_rec['date'] = fix_item_date(fields['date'])
+
+        doi = ''
+        for id in fields['identifier']:
+            if id.startswith('10.'):
+                doi = id
+            if len(doi) > 254:
+                print('DOI too long: ', doi)
+                doi = doi[:254]
+        csv_rec['doi'] = doi
+
+        csv_rec['source'] = list_2_string(fields['source'])
+        csv_rec['rights'] = list_2_string(fields['rights'])
+        csv_rec['partof'] = list_2_string(fields['ispartof'])
+        csv_rec['creator'] = list_2_string(fields['creator'])
+        csv_rec['title'] = list_2_string(fields['title'])
+
+    return csv_rec
 
 
 def write_record_to_csv(record_data, end_itr, start_itr):
@@ -221,15 +224,35 @@ def list_2_string(lst):
     return ','.join(f'"{w}"' for w in lst)
 
 
-def initial_harvest():
+# This function will harvest everything between two dates
+# dats should be in iso format: 2020-01-01
+def monthly_harvest(start, end):
+    from_date = datetime.fromisoformat(start)
+    until_date = datetime.fromisoformat(end)
+
+    # Set start cycle date for the initial iteration
+    start_itr = from_date
+
+    for end_itr in rrule(freq=MONTHLY, dtstart=from_date, until=until_date)[1:]:
+        harvest_data(start_itr, end_itr)
+
+        # change start iteration date to the current end iteration date
+        start_itr = end_itr
+
+    print('## END PROCESSING', from_date, until_date)
+
+
+def initial_harvest(date_from):
     yesterday = date.today() - timedelta(days=1)
     first_day_month = yesterday.strftime('%Y-%m-01')
 
-    monthly_harvest('2017-01-01', first_day_month)
+    # monthly harvest until beginning of current month
+    monthly_harvest(date_from, first_day_month)
 
-    from_date = first_day_month
-    end_day = yesterday.strftime('%Y-%m-%d')
-    harvest_data(from_date, end_day)
+    # harvest of the current month
+    month_start = datetime.fromisoformat(first_day_month)
+    yesterday_datetime = datetime.fromisoformat(yesterday.strftime('%Y-%m-%d'))
+    harvest_data(month_start, yesterday_datetime)
 
 
 def daily_harvest():
@@ -237,8 +260,6 @@ def daily_harvest():
     yesterday = date.today() - timedelta(days=1)
     monthly_end = yesterday.strftime('%Y-%m-01')
     monthly_harvest(monthly_start, monthly_end)
-
-
 
 
 def recurring_harvest(hours):
@@ -254,4 +275,5 @@ def recurring_harvest(hours):
 if __name__ == '__main__':
     # daily_harvest()
     # recurring_harvest(12)
-    monthly_harvest('2020-04-01', '2020-06-01')
+    # monthly_harvest('2020-04-01', '2020-06-01')
+    initial_harvest('2022-06-01')
