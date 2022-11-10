@@ -8,6 +8,8 @@ from oaipmh.client import Client
 from oaipmh.metadata import MetadataRegistry, MetadataReader
 from oaipmh import error as oaipmhError
 
+from csvfile import CsvWriter
+
 URL = 'http://oai.narcis.nl/oai'
 
 MAX_RECORD_FILE = 25000  # Max record per CSV file
@@ -77,6 +79,8 @@ def harvest_data(start_itr, end_itr):
         start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'), CSV['write_count']))
 
     client = get_client()
+
+    writer = CsvWriter(start_itr, end_itr)
 
     # reset file on every pair of dates
     if CSV["file"] is not False:
