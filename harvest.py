@@ -8,37 +8,17 @@ from oaipmh.client import Client
 from oaipmh.metadata import MetadataRegistry, MetadataReader
 from oaipmh import error as oaipmhError
 
-from csvfile import CsvWriter
+from csvwriter import CsvWriter
 
 URL = 'http://oai.narcis.nl/oai'
 
-MAX_RECORD_FILE = 25000  # Max record per CSV file
+CSV_MAX_RECORD_FILE = 25000  # Max record per CSV file
 
-CSV = {
-    "file": False,
-    "writer": None,
-    "write_count": 1,  # Counts the number of records written in one file - for file split
-    "file_count": 1  # Counts the number of files written in a two date period - for file naming
-}
-
-CSV_RECORD = {'doi': None, 'identifier': None, 'datestamp': None, 'deleted': False, 'type': None,
+CSV_FIELDS = {'doi': None, 'identifier': None, 'datestamp': None, 'deleted': False, 'type': None,
               'identifiers': None, 'date': None, 'source': None, 'rights': None,
               'partof': None, 'creator': None, 'title': None}
 
-
-# returns a CSV file with writer instance
-def get_csv(file_count, from_date, until_date):
-    # file name
-    file_name = create_file_name(file_count, from_date, until_date)
-    print(' > Creating file', file_count, from_date.strftime('%Y%m%d'), until_date.strftime('%Y%m%d'), file_name)
-
-    # create a new file
-    f = open(file_name, 'w', newline='')
-    fieldnames = list(CSV_RECORD.keys())
-    writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter='$', quotechar='"')
-    writer.writeheader()
-    return {"file": f, "writer": writer}
-
+CSV_DIR = 'harvest' # DIR should exists
 
 # Get oaipmh client
 def get_client():
@@ -75,36 +55,26 @@ def get_client():
 
 
 def harvest_data(start_itr, end_itr):
-    print('# Processing dates: %s to %s , count: %s' % (
-        start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'), CSV['write_count']))
+    print('# Processing dates: %s to %s' % (
+        start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d')))
 
     client = get_client()
 
-    writer = CsvWriter(start_itr, end_itr)
-
-    # reset file on every pair of dates
-    if CSV["file"] is not False:
-        CSV["file"].close()
-        CSV["file"] = False
-        CSV["writer"] = False
-        CSV["file_count"] = 1
-        CSV["write_count"] = 1
+    writer = CsvWriter(start_itr, end_itr, CSV_FIELDS, CSV_MAX_RECORD_FILE, CSV_DIR)
 
     try:
         records = client.listRecords(metadataPrefix='oai_dc', from_=start_itr, until=end_itr, set='publication')
         for num, record in enumerate(records):
-
             # if record[0].isDeleted() is False and record[1] is not None:
             rd = get_record_data(record)
 
             # continue if pubtype is not present or if it's an article
             # if not rd['type'] or rd['type'] == 'info:eu-repo/semantics/article':
 
-                # SAVE only if pubdate is 2021
-                # if rd['date'].split("-")[0] == '2021':
+            # SAVE only if pubdate is 2021
+            # if rd['date'].split("-")[0] == '2021':
+            writer.write_record_to_csv(rd)
 
-            if write_record_to_csv(rd, end_itr, start_itr) is True:
-                CSV["write_count"] += 1
 
 
     except oaipmhError.NoRecordsMatchError as e:
@@ -112,13 +82,12 @@ def harvest_data(start_itr, end_itr):
     except TypeError:
         print(type(record))
 
-    # print some info
-    print('     >>> written %d records between %s and %s' % (CSV['write_count'] - 1, start_itr, end_itr))
+    writer.close_file()
 
 
 def get_record_data(record):
-    #make a copy without reference
-    csv_rec =  dict(CSV_RECORD)
+    # make a copy without reference
+    csv_rec = dict(CSV_FIELDS)
 
     header = record[0]
     csv_rec['datestamp'] = header.datestamp()
@@ -154,42 +123,6 @@ def get_record_data(record):
         csv_rec['title'] = list_2_string(fields['title'])
 
     return csv_rec
-
-
-def write_record_to_csv(record_data, end_itr, start_itr):
-    """
-    Write a record to CSV, if the record is written return true
-    """
-
-    # Get file if exists or create e new one
-    writer = get_file_writer(end_itr, start_itr)
-    writer.writerow(record_data)
-    return True
-
-    return False
-
-
-def get_file_writer(end_itr, start_itr):
-    # Create the file
-    if CSV["write_count"] >= MAX_RECORD_FILE:
-        # Get another file
-        CSV["file"].close()
-        CSV["file_count"] += 1
-        CSV["write_count"] = 1
-
-    if CSV["file"] is False or CSV["file"].closed:
-        csv_file = get_csv(CSV["file_count"], start_itr, end_itr)
-        CSV["writer"] = csv_file["writer"]
-        CSV["file"] = csv_file["file"]
-
-    return CSV["writer"]
-
-
-def create_file_name(file_count, from_date, until_date):
-    file_name = 'harvest/%s-%s_%d.csv' % (
-        from_date.strftime('%Y%m%d'), until_date.strftime('%Y%m%d'), file_count
-    )
-    return file_name
 
 
 def write_record_to_mysql(rd):
