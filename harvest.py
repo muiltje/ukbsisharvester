@@ -1,6 +1,3 @@
-import csv
-import mysql.connector
-
 from dateutil.rrule import rrule, MONTHLY
 from datetime import date, datetime, timedelta
 
@@ -10,15 +7,24 @@ from oaipmh import error as oaipmhError
 
 from csvwriter import CsvWriter
 
+from os.path import exists
+
+import csv
+import logging
+
 URL = 'http://oai.narcis.nl/oai'
 
 CSV_MAX_RECORD_FILE = 25000  # Max record per CSV file
 
+# Fields of the CSV file
 CSV_FIELDS = {'doi': None, 'identifier': None, 'datestamp': None, 'deleted': False, 'type': None,
               'identifiers': None, 'date': None, 'source': None, 'rights': None,
               'partof': None, 'creator': None, 'title': None}
 
-CSV_DIR = 'harvest' # DIR should exists
+CSV_DIR = 'harvest'  # DIR should exists
+
+FILE_NAME = 'data.csv'
+
 
 # Get oaipmh client
 def get_client():
@@ -55,8 +61,10 @@ def get_client():
 
 
 def harvest_data(start_itr, end_itr):
-    print('# Processing dates: %s to %s' % (
-        start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d')))
+    return count_data(start_itr, end_itr)
+
+    logger.info('# Processing dates: %s to %s',
+                start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'))
 
     client = get_client()
 
@@ -75,14 +83,76 @@ def harvest_data(start_itr, end_itr):
             # if rd['date'].split("-")[0] == '2021':
             writer.write_record_to_csv(rd)
 
+    except oaipmhError.NoRecordsMatchError as e:
+        logger.debug("     !!!!! Exception: ", e)
+    except TypeError:
+        logger.debug(type(record))
+
+    writer.close_file()
+
+
+counter = {
+    # '2017': {'doi': 0, 'nodoi': 0, 'total': 0},
+    '2018': {'doi': 0, 'nodoi': 0, 'total': 0},
+    '2019': {'doi': 0, 'nodoi': 0, 'total': 0},
+    '2020': {'doi': 0, 'nodoi': 0, 'total': 0},
+    '2021': {'doi': 0, 'nodoi': 0, 'total': 0},
+    '2022': {'doi': 0, 'nodoi': 0, 'total': 0},
+}
+
+
+def count_data(start_itr, end_itr):
+    logger.info('# Counting dates: %s to %s',
+                start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'))
+
+    # counter = dict(count_totals)
+    target_years = counter.keys()
+
+    client = get_client()
+
+    try:
+        records = client.listRecords(metadataPrefix='oai_dc', from_=start_itr, until=end_itr, set='publication')
+        for num, record in enumerate(records):
+            # if record[0].isDeleted() is False and record[1] is not None:
+            rd = get_record_data(record)
+
+            # continue if pubtype it's an article
+            if rd['deleted'] is False and rd['type'] == 'info:eu-repo/semantics/article':
+                # SAVE only if pubdate is 2021
+                year = rd['date'].split("-")[0]
+                if year in target_years:
+                    counter[year]['total'] += 1
+                    if rd['doi'] == '':
+                        counter[year]['nodoi'] += 1
+                    else:
+                        counter[year]['doi'] += 1
+
 
 
     except oaipmhError.NoRecordsMatchError as e:
-        print("     !!!!! Exception: ", e)
+        logger.debug("     !!!!! Exception: ", e)
     except TypeError:
-        print(type(record))
+        logger.debug(type(record))
 
-    writer.close_file()
+    logger.info(counter)
+    write_totals(counter, start_itr, end_itr)
+
+
+def write_totals(counter, from_date, to_date):
+    write_header = not exists(FILE_NAME)
+
+    with open(FILE_NAME, 'a', newline='') as file:
+        fieldnames = ['from', 'to', 'year', 'doi', 'nodoi', 'total']
+        writer = csv.DictWriter(file, fieldnames=fieldnames, delimiter=';', quotechar='"')
+        if write_header:
+            writer.writeheader()
+
+        for k in counter:
+            f = counter[k]
+            writer.writerow({'from': from_date, 'to': to_date, 'year': k, 'doi': f['doi'], 'nodoi': f['nodoi'],
+                             'total': f['total']})
+
+    file.close()
 
 
 def get_record_data(record):
@@ -112,7 +182,7 @@ def get_record_data(record):
             if id.startswith('10.'):
                 doi = id
             if len(doi) > 254:
-                print('DOI too long: ', doi)
+                logger.debug('DOI too long: ', doi)
                 doi = doi[:254]
         csv_rec['doi'] = doi
 
@@ -123,24 +193,6 @@ def get_record_data(record):
         csv_rec['title'] = list_2_string(fields['title'])
 
     return csv_rec
-
-
-def write_record_to_mysql(rd):
-    mydb = mysql.connector.connect(
-        host="localhost",
-        port="3305",
-        user="root",
-        password="stocazzo",
-        database="ukbasis"
-    )
-
-    mycursor = mydb.cursor()
-
-    sql = "INSERT INTO narcis (doi, type, datestamp, identifiers, date, title) VALUES (%s, %s, %s, %s, %s, %s)"
-    val = (rd['doi'], rd['type'], rd['datestamp'], rd['identifiers'], rd['date'], rd['title'])
-    mycursor.execute(sql, val)
-
-    mydb.commit()
 
 
 def fix_item_date(date):
@@ -167,6 +219,8 @@ def monthly_harvest(start, end):
     from_date = datetime.fromisoformat(start)
     until_date = datetime.fromisoformat(end)
 
+    logger.info('## START MONTHLY PROCESSING from %s until %s', from_date, until_date)
+
     # Set start cycle date for the initial iteration
     start_itr = from_date
 
@@ -176,27 +230,30 @@ def monthly_harvest(start, end):
         # change start iteration date to the current end iteration date
         start_itr = end_itr
 
-    print('## END PROCESSING', from_date, until_date)
+    logger.info('## END MONTHLY PROCESSING', from_date, until_date)
 
 
+# Harvest of all historical data
+# consists in a monthly harvest until current month and then a normal harvest until yesterday
 def initial_harvest(date_from):
-    yesterday = date.today() - timedelta(days=1)
-    first_day_month = yesterday.strftime('%Y-%m-01')
+    logger.info('#### START INITIAL HARVEST from %s ####', date_from)
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    first_day_current_month = yesterday.strftime('%Y-%m-01')
 
     # monthly harvest until beginning of current month
-    monthly_harvest(date_from, first_day_month)
+    monthly_harvest(date_from, first_day_current_month)
 
-    # harvest of the current month
-    month_start = datetime.fromisoformat(first_day_month)
-    yesterday_datetime = datetime.fromisoformat(yesterday.strftime('%Y-%m-%d'))
-    harvest_data(month_start, yesterday_datetime)
+    # harvest of the current month until yesterday
+    month_start = datetime.fromisoformat(first_day_current_month)
+    today_datetime = datetime.fromisoformat(today.strftime('%Y-%m-%d'))
+    harvest_data(month_start, today_datetime)
 
+    # harvest today
 
-def daily_harvest():
-    monthly_start = '2017-01-01'
-    yesterday = date.today() - timedelta(days=1)
-    monthly_end = yesterday.strftime('%Y-%m-01')
-    monthly_harvest(monthly_start, monthly_end)
+    until_date = datetime.now()
+    harvest_data(today_datetime, until_date)
 
 
 def recurring_harvest(hours):
@@ -209,8 +266,15 @@ def recurring_harvest(hours):
     harvest_data(from_date, until_date)
 
 
+def harvest_from_date(iso_date):
+    from_date = datetime.fromisoformat(iso_date)
+    until_now = datetime.now()
+    harvest_data(from_date, until_now)
+
+
 if __name__ == '__main__':
-    # daily_harvest()
-    # recurring_harvest(12)
-    # monthly_harvest('2020-04-01', '2020-06-01')
-    initial_harvest('2022-06-01')
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger(__name__)
+    FILE_NAME = '03_count.csv'
+    initial_harvest('2020-05-01')
+    # harvest_from_date('2022-11-01')
