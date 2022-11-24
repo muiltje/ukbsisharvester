@@ -16,8 +16,15 @@ CSV_FIELDS = {'doi': None, 'identifier': None, 'datestamp': None, 'deleted': Fal
               'identifiers': None, 'date': None, 'source': None, 'rights': None,
               'partof': None, 'creator': None, 'title': None}
 
-OUTPUT_DIR = 'harvest'  # DIR should exists
 FILE_NAME = 'data.csv'
+
+"""
+Logging
+"""
+logfile = date.today().strftime('%Y-%m-%d_') + config.LOGFILE_SUFFIX
+logging.basicConfig(filename=logfile, filemode='a')
+logger = logging.getLogger(__name__)
+logger.setLevel(config.LOG_LEVEL)
 
 
 # Get oaipmh client
@@ -287,14 +294,6 @@ def harvest_from_date(iso_date, count_only=False):
 
 
 if __name__ == '__main__':
-    logfile = date.today().strftime('%Y-%m-%d_') + config.LOGFILE_SUFFIX
-
-    logging.basicConfig(filename=logfile,
-                        filemode='a')
-
-    logger = logging.getLogger(__name__)
-    logger.setLevel(config.LOG_LEVEL)
-
     # count_only = True
     # if count_only:
     #     FILE_NAME = config.OUTPUT_DIR + date.today().strftime('/%Y-%m-%d_count.csv')

@@ -1,6 +1,13 @@
 """ CSV File handling made simple """
 import csv
+import logging
+from datetime import date
+import config
 
+logfile = date.today().strftime('%Y-%m-%d_') + config.LOGFILE_SUFFIX
+logging.basicConfig(filename=logfile, filemode='a')
+logger = logging.getLogger(__name__)
+logger.setLevel(config.LOG_LEVEL)
 
 class CsvWriter:
 
@@ -41,8 +48,8 @@ class CsvWriter:
         )
         if self._write_count > 0 :
             print('   - Witten ', self._write_count , ' records')
-        print(' > Creating file', self._start_date.strftime('%Y%m%d'),
-              self._end_date.strftime('%Y%m%d'), file_name)
+            logger.info('   - Witten %s records', self._write_count)
+        logger.info(' > Creating file %s', file_name)
 
         # create a new file
         self._file = open(file_name, 'w', newline='')
