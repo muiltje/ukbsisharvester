@@ -52,7 +52,7 @@ class CsvWriter:
         logger.info(' > Creating file %s', file_name)
 
         # create a new file
-        self._file = open(file_name, 'w', newline='')
+        self._file = open(file_name, 'w', newline='', encoding='utf8')
         fieldnames = list(self._fields_name.keys())
         self._writer = csv.DictWriter(self._file, fieldnames=fieldnames, delimiter='$', quotechar='"')
         self._writer.writeheader()
