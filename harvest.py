@@ -1,28 +1,22 @@
 from dateutil.rrule import rrule, MONTHLY
 from datetime import date, datetime, timedelta
-
 from oaipmh.client import Client
 from oaipmh.metadata import MetadataRegistry, MetadataReader
 from oaipmh import error as oaipmhError
-
 from csvwriter import CsvWriter
-
 from os.path import exists
-
 import csv
 import logging
+import config
 
-URL = 'http://oai.narcis.nl/oai'
-
-CSV_MAX_RECORD_FILE = 25000  # Max record per CSV file
+API_URL = 'http://oai.narcis.nl/oai'
 
 # Fields of the CSV file
 CSV_FIELDS = {'doi': None, 'identifier': None, 'datestamp': None, 'deleted': False, 'type': None,
               'identifiers': None, 'date': None, 'source': None, 'rights': None,
               'partof': None, 'creator': None, 'title': None}
 
-CSV_DIR = 'harvest'  # DIR should exists
-
+OUTPUT_DIR = 'harvest'  # DIR should exists
 FILE_NAME = 'data.csv'
 
 
@@ -56,32 +50,31 @@ def get_client():
     )
 
     registry.registerReader('oai_dc', oai_dc_reader)
-    client = Client(URL, registry)
+    client = Client(API_URL, registry)
     return client
 
 
-def harvest_data(start_itr, end_itr):
-    return count_data(start_itr, end_itr)
+def harvest_data(start_itr, end_itr, count_only=False):
+    if count_only:
+        return count_data(start_itr, end_itr)
 
-    logger.info('# Processing dates: %s to %s',
+    logger.info('# Harvesting data between dates: %s to %s',
                 start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'))
 
     client = get_client()
 
-    writer = CsvWriter(start_itr, end_itr, CSV_FIELDS, CSV_MAX_RECORD_FILE, CSV_DIR)
+    writer = CsvWriter(start_itr, end_itr, CSV_FIELDS, config.MAX_CSV_ROWS, config.OUTPUT_DIR)
 
     try:
         records = client.listRecords(metadataPrefix='oai_dc', from_=start_itr, until=end_itr, set='publication')
         for num, record in enumerate(records):
-            # if record[0].isDeleted() is False and record[1] is not None:
-            rd = get_record_data(record)
+            if record[0].isDeleted() is False and record[1] is not None:
+                rd = get_record_data(record)
 
-            # continue if pubtype is not present or if it's an article
-            # if not rd['type'] or rd['type'] == 'info:eu-repo/semantics/article':
+                # continue if pubtype is not present or if it's an article
+                # if not rd['type'] or rd['type'] == 'info:eu-repo/semantics/article':
 
-            # SAVE only if pubdate is 2021
-            # if rd['date'].split("-")[0] == '2021':
-            writer.write_record_to_csv(rd)
+                writer.write_record_to_csv(rd)
 
     except oaipmhError.NoRecordsMatchError as e:
         logger.debug("     !!!!! Exception: ", e)
@@ -127,10 +120,8 @@ def count_data(start_itr, end_itr):
                     else:
                         counter[year]['doi'] += 1
 
-
-
     except oaipmhError.NoRecordsMatchError as e:
-        logger.debug("     !!!!! Exception: ", e)
+        logger.debug("     !!!!! Exception: %s", e)
     except TypeError:
         logger.debug(type(record))
 
@@ -156,6 +147,9 @@ def write_totals(counter, from_date, to_date):
 
 
 def get_record_data(record):
+    """
+    Extracts data from api record
+    """
     # make a copy without reference
     csv_rec = dict(CSV_FIELDS)
 
@@ -213,9 +207,11 @@ def list_2_string(lst):
     return ','.join(f'"{w}"' for w in lst)
 
 
-# This function will harvest everything between two dates
-# dats should be in iso format: 2020-01-01
-def monthly_harvest(start, end):
+def monthly_harvest(start, end, count_only=False):
+    """
+    This function will harvest everything between two dates until first day of the mont of the end date
+    dats should be in iso format: 2020-01-01
+    """
     from_date = datetime.fromisoformat(start)
     until_date = datetime.fromisoformat(end)
 
@@ -225,17 +221,19 @@ def monthly_harvest(start, end):
     start_itr = from_date
 
     for end_itr in rrule(freq=MONTHLY, dtstart=from_date, until=until_date)[1:]:
-        harvest_data(start_itr, end_itr)
+        harvest_data(start_itr, end_itr, count_only)
 
         # change start iteration date to the current end iteration date
         start_itr = end_itr
 
-    logger.info('## END MONTHLY PROCESSING', from_date, until_date)
+    logger.info('## END MONTHLY PROCESSING ##')
 
 
-# Harvest of all historical data
-# consists in a monthly harvest until current month and then a normal harvest until yesterday
-def initial_harvest(date_from):
+def initial_harvest(date_from, count_only=False):
+    """
+    Harvest of all historical data
+    consists in a monthly harvest until current month and then a normal harvest until yesterday
+    """
     logger.info('#### START INITIAL HARVEST from %s ####', date_from)
 
     today = date.today()
@@ -243,38 +241,67 @@ def initial_harvest(date_from):
     first_day_current_month = yesterday.strftime('%Y-%m-01')
 
     # monthly harvest until beginning of current month
-    monthly_harvest(date_from, first_day_current_month)
+    monthly_harvest(date_from, first_day_current_month, count_only)
 
     # harvest of the current month until yesterday
     month_start = datetime.fromisoformat(first_day_current_month)
     today_datetime = datetime.fromisoformat(today.strftime('%Y-%m-%d'))
-    harvest_data(month_start, today_datetime)
+    harvest_data(month_start, today_datetime, count_only)
 
     # harvest today
 
     until_date = datetime.now()
-    harvest_data(today_datetime, until_date)
+    harvest_data(today_datetime, until_date, count_only)
 
 
-def recurring_harvest(hours):
-    # from_date = '2022-07-13T22:00:00Z'
-    # from_date = datetime.strptime(from_date, "%Y-%m-%dT%H:%M:%SZ")
-    until_date = datetime.now()
-    # from_date = until_date - timedelta(hours=hours)
-    from_date = datetime.fromisoformat('2022-09-01')
-
+def harvest_one_day(iso_date):
+    """
+    Harvest only one day
+    """
+    logger.info('#### Harvest one day from: %s', iso_date)
+    from_date = datetime.fromisoformat(iso_date)
+    until_date = from_date + timedelta(days=1)
     harvest_data(from_date, until_date)
 
 
-def harvest_from_date(iso_date):
+def harvest_yesterday():
+    """
+    Harvest yesterdays data
+    """
+    until_date = datetime.now()
+    from_date = until_date - timedelta(days=1)
+    logger.info('#### Harvest yesterday data from %s to %s', from_date.strftime('%Y-%m-%d'),
+                until_date.strftime('%Y-%m-%d'))
+    harvest_data(from_date, until_date)
+
+
+def harvest_from_date(iso_date, count_only=False):
+    """
+    Harvesting from a specific date
+    """
+    logger.info('#### Logging from date %s', iso_date)
     from_date = datetime.fromisoformat(iso_date)
     until_now = datetime.now()
-    harvest_data(from_date, until_now)
+
+    harvest_data(from_date, until_now, count_only)
 
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logfile = date.toda().strftime('%Y-%m-%d_') + config.LOGFILE_SUFFIX
+
+    logging.basicConfig(filename=logfile,
+                        filemode='a')
+
     logger = logging.getLogger(__name__)
-    FILE_NAME = '03_count.csv'
-    initial_harvest('2020-05-01')
-    # harvest_from_date('2022-11-01')
+    logger.setLevel(config.LOG_LEVEL)
+
+    # count_only = True
+    # if count_only:
+    #     FILE_NAME = config.OUTPUT_DIR + date.today().strftime('/%Y-%m-%d_count.csv')
+    #
+    # initial_harvest('2020-05-01', count_only)
+
+    # get_narcis_total()
+    #
+
+    harvest_one_day('2022-11-22')
