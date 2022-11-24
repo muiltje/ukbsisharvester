@@ -3,11 +3,15 @@ import csv
 import logging
 from datetime import date
 import config
+import sys
 
-logfile = date.today().strftime('%Y-%m-%d_') + config.LOGFILE_SUFFIX
-logging.basicConfig(filename=logfile, filemode='a')
+
 logger = logging.getLogger(__name__)
-logger.setLevel(config.LOG_LEVEL)
+consoleHandler = logging.StreamHandler(sys.stdout)
+log_format = "%(asctime)s - %(levelname)-8s - %(name)s | %(message)s"
+logFormatter = logging.Formatter(log_format)
+consoleHandler.setFormatter(logFormatter)
+logger.addHandler(consoleHandler)
 
 class CsvWriter:
 
@@ -47,9 +51,8 @@ class CsvWriter:
             self._dir, self._start_date.strftime('%Y%m%d'), self._end_date.strftime('%Y%m%d'), self._file_count
         )
         if self._write_count > 0 :
-            print('   - Witten ', self._write_count , ' records')
-            logger.info('   - Witten %s records', self._write_count)
-        logger.info(' > Creating file %s', file_name)
+            logger.info('Witten %s records', self._write_count)
+        logger.info('Creating file %s', file_name)
 
         # create a new file
         self._file = open(file_name, 'w', newline='', encoding='utf8')

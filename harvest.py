@@ -1,3 +1,4 @@
+import sys
 from dateutil.rrule import rrule, MONTHLY
 from datetime import date, datetime, timedelta
 from oaipmh.client import Client
@@ -22,9 +23,14 @@ FILE_NAME = 'data.csv'
 Logging
 """
 logfile = date.today().strftime('%Y-%m-%d_') + config.LOGFILE_SUFFIX
-logging.basicConfig(filename=logfile, filemode='a')
-logger = logging.getLogger(__name__)
-logger.setLevel(config.LOG_LEVEL)
+log_format = "%(asctime)s - %(levelname)-8s - %(name)s | %(message)s"
+logging.basicConfig(filename=logfile, filemode='a', format=log_format, level=config.LOG_LEVEL)
+logger = logging.getLogger('Harvester')
+
+consoleHandler = logging.StreamHandler(sys.stdout)
+logFormatter = logging.Formatter(log_format)
+consoleHandler.setFormatter(logFormatter)
+logger.addHandler(consoleHandler)
 
 
 # Get oaipmh client
@@ -65,7 +71,7 @@ def harvest_data(start_itr, end_itr, count_only=False):
     if count_only:
         return count_data(start_itr, end_itr)
 
-    logger.info('# Harvesting data between dates: %s to %s',
+    logger.info('# Harvesting data between from %s until %s',
                 start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'))
 
     client = get_client()
@@ -84,9 +90,9 @@ def harvest_data(start_itr, end_itr, count_only=False):
                 writer.write_record_to_csv(rd)
 
     except oaipmhError.NoRecordsMatchError as e:
-        logger.debug("     !!!!! Exception: ", e)
+        logger.info("No records found for the period %s - %s", start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'))
     except TypeError:
-        logger.debug(type(record))
+        logger.error(type(record))
 
     writer.close_file()
 
@@ -241,7 +247,7 @@ def initial_harvest(date_from, count_only=False):
     Harvest of all historical data
     consists in a monthly harvest until current month and then a normal harvest until yesterday
     """
-    logger.info('#### START INITIAL HARVEST from %s ####', date_from)
+    logger.info('#### START INITIAL HARVEST from %s, count is %s ####', date_from, count_only)
 
     today = date.today()
     yesterday = today - timedelta(days=1)
