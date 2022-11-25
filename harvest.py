@@ -22,7 +22,7 @@ FILE_NAME = 'data.csv'
 """
 Logging
 """
-logfile = date.today().strftime('%Y-%m-%d_') + config.LOGFILE_SUFFIX
+logfile = config.LOGFILE_DIR + date.today().strftime('%Y-%m-%d_') + config.LOGFILE_SUFFIX
 log_format = "%(asctime)s - %(levelname)-8s - %(name)s | %(message)s"
 logging.basicConfig(filename=logfile, filemode='a', format=log_format, level=config.LOG_LEVEL)
 logger = logging.getLogger('Harvester')

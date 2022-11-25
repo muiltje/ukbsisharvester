@@ -7,5 +7,7 @@ MAX_CSV_ROWS = 40000
 # suffix of the logfile
 LOGFILE_SUFFIX = 'harvest.log'
 
+LOGFILE_DIR = ''
+
 # log levels : DEBUG, INFO, WARNING, ERROR, CRITICAL
 LOG_LEVEL = 'DEBUG'
