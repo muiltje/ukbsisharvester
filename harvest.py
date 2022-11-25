@@ -262,9 +262,8 @@ def initial_harvest(date_from, count_only=False):
     harvest_data(month_start, today_datetime, count_only)
 
     # harvest today
-
-    until_date = datetime.now()
-    harvest_data(today_datetime, until_date, count_only)
+    # until_date = datetime.now()
+    # harvest_data(today_datetime, until_date, count_only)
 
 
 def harvest_one_day(iso_date):
