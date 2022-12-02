@@ -1,3 +1,0 @@
-[submodule "lib/pyoai"]
-	path = lib/pyoai
-	url = https://github.com/infrae/pyoai
