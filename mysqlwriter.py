@@ -1,11 +1,15 @@
 import mysql.connector
 
+"""
+You can use this file to write the results to a mysql DB
+"""
+
 
 def write_record_to_mysql(rd):
     mydb = mysql.connector.connect(
         host="localhost",
         port="3305",
-        user="root",
+        user="******",
         password="******",
         database="******"
     )
