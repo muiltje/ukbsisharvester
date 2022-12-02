@@ -1,49 +1,38 @@
 # ukbsisharvester
 
-Please note: add fiels to metadata.py if needed (e.g. isPartOf)
+This script extract data from Narcis API
 
-# Development Workflow:
+# Dependencies
 
-After installing pip end pipenv run the following commands:
-
-`git clone --recurse-submodules git@github.com: . . . `
-
-`cd to/you/project/dir/`
-
-`pipenv install` 
-
-`pipenv shell`
-
-`python harverst.py`
-
-# Pipenv 
-
-Pipenv is used to manage the project dependencies and create a virtual environment. 
-
-More info: https://pipenv-fork.readthedocs.io/en/latest/basics.html
+## PYOAI
+This project makes use of https://github.com/infrae/pyoai/, the library is dirctly added to this source code  (commit 4800af53b2ed096a0305eed1d6710138a65eabcd 8/3/22)  
 
 
-# PYOAI
+# Installation :
 
-This project uses: https://github.com/infrae/pyoai
+1. Clone the repository
+2. install **pip** end **pipenv** 
+3. run the following commands:
+4. cd to/you/project/dir/
+5. run `pipenv install` 
+6. run `pipenv shell`
+7. Configure the relevant options in the config.py file
 
-The package is committed added as a git sumbodule, 
+# Customization
 
-To check out the submodule:
+if you need different metadata modify the function: **get_client()** in harvest.py
 
-`git clone --recurse-submodules https:// ....`
+# Running the harvester
 
-To init and update the submodule:
+You can run the harvest task by modifying the **main()** function of harvest.py and then run `python harverst.py`
+You can run one of the scripts without arguments:
+- **harvest_initial.py**: to run the initial harvest until today @00:00, you can modify the start date in the script
+- **harvest_daily.py**: to run the harvest only from yesterday
+- **harvest_count.py**: it extracts the amount of articles from the filter menu Narcis website (only document type articles )
 
-`git submodule init`
 
-`git submodule update`
 
-or alternatively
 
-` git submodules update --init`
 
-to update the submodule with the latest version
 
-`git pull --recurse-submodules`
 
