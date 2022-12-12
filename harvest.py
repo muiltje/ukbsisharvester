@@ -67,7 +67,7 @@ def get_client():
     return client
 
 
-def harvest_data(start_itr, end_itr, count_only=False):
+def harvest_data(start_itr, end_itr, count_only=False, initial=False):
     if count_only:
         return count_data(start_itr, end_itr)
 
@@ -81,13 +81,13 @@ def harvest_data(start_itr, end_itr, count_only=False):
     try:
         records = client.listRecords(metadataPrefix='oai_dc', from_=start_itr, until=end_itr, set='publication')
         for num, record in enumerate(records):
-            if record[0].isDeleted() is False and record[1] is not None:
-                rd = get_record_data(record)
+            if initial and record[0].isDeleted() is True:  # and record[1] is None:
+                continue
 
-                # continue if pubtype is not present or if it's an article
-                # if not rd['type'] or rd['type'] == 'info:eu-repo/semantics/article':
-
-                writer.write_record_to_csv(rd)
+            rd = get_record_data(record)
+            # continue if pubtype is not present or if it's an article
+            # if not rd['type'] or rd['type'] == 'info:eu-repo/semantics/article':
+            writer.write_record_to_csv(rd)
 
     except oaipmhError.NoRecordsMatchError as e:
         logger.info("No records found for the period %s - %s", start_itr.strftime('%Y%m%d'), end_itr.strftime('%Y%m%d'))
@@ -220,7 +220,7 @@ def list_2_string(lst):
     return ','.join(f'"{w}"' for w in lst)
 
 
-def monthly_harvest(start, end, count_only=False):
+def monthly_harvest(start, end, count_only=False, initial=True):
     """
     This function will harvest everything between two dates until first day of the mont of the end date
     dats should be in iso format: 2020-01-01
@@ -234,7 +234,7 @@ def monthly_harvest(start, end, count_only=False):
     start_itr = from_date
 
     for end_itr in rrule(freq=MONTHLY, dtstart=from_date, until=until_date)[1:]:
-        harvest_data(start_itr, end_itr, count_only)
+        harvest_data(start_itr, end_itr, count_only, initial)
 
         # change start iteration date to the current end iteration date
         start_itr = end_itr
@@ -254,12 +254,12 @@ def initial_harvest(date_from, count_only=False):
     first_day_current_month = yesterday.strftime('%Y-%m-01')
 
     # monthly harvest until beginning of current month
-    monthly_harvest(date_from, first_day_current_month, count_only)
+    monthly_harvest(date_from, first_day_current_month, count_only, initial=True)
 
     # harvest of the current month until yesterday
     month_start = datetime.fromisoformat(first_day_current_month)
     today_datetime = datetime.fromisoformat(today.strftime('%Y-%m-%d'))
-    harvest_data(month_start, today_datetime, count_only)
+    harvest_data(month_start, today_datetime, count_only, initial=True)
 
     # harvest today
     # until_date = datetime.now()
