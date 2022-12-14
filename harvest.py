@@ -1,6 +1,7 @@
 import sys
 from dateutil.rrule import rrule, MONTHLY
 from datetime import date, datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from oaipmh.client import Client
 from oaipmh.metadata import MetadataRegistry, MetadataReader
 from oaipmh import error as oaipmhError
@@ -246,16 +247,30 @@ def initial_harvest(date_from, count_only=False):
     """
     Harvest of all historical data
     consists in a monthly harvest until current month and then a normal harvest until yesterday
+    Three steps harvest:
+    1. date_from > first_day_following_month
+    2. first_day_following_month > first_day_current_month
+    3. first_day_current_month > today
+
     """
     logger.info('#### START INITIAL HARVEST from %s, count is %s ####', date_from, count_only)
 
+    # 1. date_from > first_day_following_month
+    datetime_from = datetime.fromisoformat(date_from)
+    datetime_from_after_month = datetime_from + relativedelta(months=1)
+    first_day_following_month = datetime_from_after_month.replace(day=1)
+
+    harvest_data(datetime_from, first_day_following_month, count_only, initial=True)
+
+    # 2. first_day_following_month > first_day_current_month
+    # monthly harvest until beginning of current month
     today = date.today()
     yesterday = today - timedelta(days=1)
     first_day_current_month = yesterday.strftime('%Y-%m-01')
 
-    # monthly harvest until beginning of current month
-    monthly_harvest(date_from, first_day_current_month, count_only, initial=True)
+    monthly_harvest(first_day_following_month.strftime('%Y-%m-01'), first_day_current_month, count_only, initial=True)
 
+    # 3. first_day_current_month > today
     # harvest of the current month until yesterday
     month_start = datetime.fromisoformat(first_day_current_month)
     today_datetime = datetime.fromisoformat(today.strftime('%Y-%m-%d'))
@@ -299,13 +314,13 @@ def harvest_from_date(iso_date, count_only=False):
 
 
 if __name__ == '__main__':
-    # count_only = True
+    count_only = True
     # if count_only:
     #     FILE_NAME = config.OUTPUT_DIR + date.today().strftime('/%Y-%m-%d_count.csv')
     #
-    # initial_harvest('2020-05-01', count_only)
+    initial_harvest('2020-11-29', count_only)
 
     # get_narcis_total()
     #
 
-    harvest_one_day('2022-11-22')
+    #harvest_one_day('2022-11-22')
